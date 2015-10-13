@@ -26,8 +26,8 @@ import (
          "time"
          "sync/atomic"
          
-         "../util/deque"
-         "../bytes"
+         "github.com/mbenkmann/golib/util/deque"
+         "github.com/mbenkmann/golib/bytes"
        )
 
 // The loggers used by util.Log(). 
