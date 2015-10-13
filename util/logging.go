@@ -28,7 +28,7 @@ import (
          "time"
          "sync/atomic"
          
-         "github.com/mbenkmann/golib/util/deque"
+         "github.com/mbenkmann/golib/deque"
          "github.com/mbenkmann/golib/bytes"
        )
 
