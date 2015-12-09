@@ -203,6 +203,8 @@ func SendLn(conn net.Conn, s string, timeout time.Duration) error {
   var deadline time.Time // zero value means "no deadline"
   if timeout >= 0 { deadline = time.Now().Add(timeout) }
   conn.SetWriteDeadline(deadline)
+  var no_deadline time.Time
+  defer conn.SetWriteDeadline(no_deadline)
   
   _, err := WriteAll(conn, sendbuf)
   if err != nil {
@@ -233,6 +235,8 @@ func ReadLn(conn net.Conn, timeout time.Duration) (string, error) {
   var deadline time.Time // zero value means "no deadline"
   if timeout > 0 { deadline = time.Now().Add(timeout) }
   conn.SetReadDeadline(deadline)  
+  var no_deadline time.Time
+  defer conn.SetReadDeadline(no_deadline)
   
   var buf = make([]byte, 128)
   var i int
