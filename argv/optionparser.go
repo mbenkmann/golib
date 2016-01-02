@@ -28,10 +28,51 @@ import (
          "strconv"
        )
 
-// Number of screen columns for formatting usage in function Usage.String().
-// If Columns I<= 0, then the environment variable COLUMNS is used. If COLUMNS
-// is empty or cannot be parsed as an integer, 80 is used.
+/*
+  Number of screen columns for formatting usage in function Usage.String().
+  If Columns I<= 0, then the environment variable COLUMNS is used. If COLUMNS
+  is empty or cannot be parsed as an integer, 80 is used.
+  NOTE: Asian wide characters are supported by Usage.String() and count as
+  2 screen columns.
+*/
 var Columns = 0
+
+/*
+  An integer in the range 0-100. The minimum percentage of screen columns (as specified
+  by Columns above) that should be available for the last column (which typically
+  contains the textual explanation of an option) when formatting usage with Usage.String().
+  If less space is available, the last column will be printed on its own line, indented
+  according to LastColumnOwnLineMaxPercent (see below).
+*/
+var LastColumnMinPercent = 50
+
+/*
+  An integer in the range 0-100. If String.Usage() formats the last column on its own line
+  due to less than LastColumnMinPercent (see above) of screen columns being available,
+  then only LastColumnOwnLineMaxPercent of the extra line(s) will be used for the
+  last column's text. This ensures an indentation. E.g.:
+
+    Columns=20, LastColumnMinPercent=50 (i.e. last column's minimum size=20 * 50% = 10)
+    
+   --3456789 1234567890
+             1234567890
+ 
+    Columns=20, LastColumnMinPercent=75 (i.e. last column's minimum size=20 * 75% = 15),
+    LastColumnOwnLineMaxPercent=75 (i.e. maximum size = 20 * 75% = 15)
+    
+   --3456789
+        123456789012345
+        67890
+ 
+    Columns=20, LastColumnMinPercent=75 (i.e. last column's minimum size=20 * 75% = 15)
+    LastColumnOwnLineMaxPercent=25 (i.e. maximum size = 20 * 25% = 5)
+   --3456789
+                  12345
+                  67890
+                  12345
+                  67890
+*/
+var LastColumnOwnLineMaxPercent = 75
 
 var ARG_OK error = nil
 type ARG_NONE struct { error }
@@ -667,6 +708,130 @@ func Parse(args []string, usage Usage, flags string) (options []*Option, nonopti
 }
 
 
+/*
+ Converts the OptionInfo.Help texts from usage into a nicely formatted
+ "manpage" with support for multi-column layout and line-wrapping.
+ The following explains how to write your OptionInfo.Help texts to make
+ use of these features.
+ 
+ TABLE FORMATTING
+ 
+ Table formatting is the most essential tool for making your usage look nice.
+ Without table formatting your output will look like this:
+
+   -c, --create  |Creates something.
+   -k, --kill  |Destroys something.
+ 
+ With table formatting you can align the texts:
+
+   -c, --create  |Creates something.
+   -k, --kill    |Destroys something.
+
+ Often programmers achieve alignment by manual padding with spaces. However this
+ does not play nice with gettext translation and can not take different terminal
+ widths into account.
+ 
+ Table formatting removes the need to pad help texts manually.
+ To create a table, simply insert '\t' (tab) characters to separate the cells
+ within a row. E.g.:
+ 
+   var usage = argv.Usage{ 
+   {..., "-c, --create  \tCreates something." },
+   {..., "-k, --kill  \tDestroys something." }, ...
+
+ Note that you must include the minimum amount of space desired between cells yourself.
+ Table formatting will insert further spaces as needed to achieve alignment.
+
+
+ MULTIPLE ROWS PER Help TEXT
+ 
+ The same OptionInfo.Help text may contain multiple rows.
+ These are separated by '\n' (line feed). E.g.:
+ 
+   var usage = argv.Usage{ 
+   {..., "-c, --create  \tCreates something." + 
+         "\n" + 
+         "-k, --kill  \tDestroys something." }, ...
+
+ results in the same output as the previous example.
+ 
+ 
+ MULTI-LINE CELLS
+ 
+ You can insert line breaks within cells by using '\v' (vertical tab).
+ Do not confuse this with the multiple-rows-per Help text feature described
+ in the previous section. E.g.:
+
+   var usage = argv.Usage{ 
+   {..., "-c,\v--create  \tCreates\vsomething." },
+   {..., "-k,\v--kill  \tDestroys\vsomething." }, ...
+ 
+   results in
+ 
+   -c,       Creates
+   --create  something.
+   -k,       Destroys
+   --kill    something.
+
+ 
+ PLAIN LINE INSERTIONS
+ 
+ It is possible to mix Help strings that use table formatting characters '\t' and '\v'
+ with plain strings that don't any table formatting characters. The plain lines will not
+ mess up the table layout. Alignment of the table columns will continue after the plain
+ line insertion. E.g.
+ 
+   var usage = argv.Usage{ 
+   {..., "-c, --create  \tCreates something." },
+   {..., "----------------------------------" },
+   {..., "-k, --kill  \tDestroys something." }, ...
+ 
+   results in
+ 
+   -c, --create  Creates something.
+   ----------------------------------
+   -k, --kill    Destroys something.
+
+ 
+ MULTIPLE TABLES
+ 
+ The same Usage may contain multiple tables whose columns are
+ aligned independently. To start a new table, insert a dummy OptionInfo with Help=="\f" (form feed).
+ 
+   var usage = argv.Usage{ 
+   {..., "Long options:" },
+   {..., "--very-long-option  \tDoes something long." },
+   {..., "--ultra-super-mega-long-option  \tTakes forever to complete." },
+   {..., "\f" }, // ---------- table break -----------
+   {..., "Short options:" },
+   {..., "-s  \tShort." },
+   {..., "-q  \tQuick." }, ...
+ 
+   results in
+ 
+   Long options:
+   --very-long-option              Does something long.
+   --ultra-super-mega-long-option  Takes forever to complete.
+   Short options:
+   -s  Short.
+   -q  Quick.
+ 
+   Without the table break it would be
+ 
+   Long options:
+   --very-long-option              Does something long.
+   --ultra-super-mega-long-option  Takes forever to complete.
+   Short options:
+   -s                              Short.
+   -q                              Quick.
+
+
+ LINE-WRAPPING
+
+ Lines will be wrapped according to the global parameters Columns,
+ LastColumnMinPercent and LastColumnOwnLineMaxPercent. See their documentation
+ for details.
+*/
 func (usage Usage) String() string {
   return formatUsage(usage)
 }

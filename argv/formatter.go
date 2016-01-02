@@ -25,7 +25,7 @@ package argv
 import (
          "io"
          "os"
-         "fmt"
+         "strings"
          "strconv"
        )
 
@@ -313,6 +313,17 @@ func (l *LinePartIterator) Data() string {
   return l.usage[l.rowdesc].Help[l.ptr:l.ptr+l.length]
 }
 
+/*
+  Returns the byte that terminates the current part within the
+  Help text. If the part is terminated by the end of the string, the
+  returned byte is 0.
+*/
+func (l *LinePartIterator) PartTerminator() byte {
+  if l.rowdesc == -1 || l.ptr == -1 || l.rowdesc >= len(l.usage) { return 0 }
+  if l.ptr+l.length == len(l.usage[l.rowdesc].Help) { return 0 }
+  return l.usage[l.rowdesc].Help[l.ptr+l.length]
+}
+
 /* 
  * Determines the byte and character lengths of the part at ptr and 
  * stores them in length and screenlen respectively.
@@ -342,15 +353,192 @@ func (l *LinePartIterator) update_length() {
   }
 }
 
+type stringwriter []string
+
+func (w *stringwriter) Write(b []byte) (n int, err error) {
+  *w = append(*w, string(b)) 
+  return len(b), nil
+}
+
+func (w *stringwriter) WriteString(s string) (n int, err error) {
+  *w = append(*w, s) 
+  return len(s), nil
+}
+
 func formatUsage(usage Usage) string {
-  columns := Columns
-  if columns <= 0 {
-    var err error
-    columns, err = strconv.Atoi(os.Getenv("COLUMNS"))
-    if err != nil { columns = 80 }
-  }
+  write := &stringwriter{}
   
-  return fmt.Sprintf("%v", columns)
+  width := Columns
+  if width <= 0 {
+    var err error
+    width, err = strconv.Atoi(os.Getenv("COLUMNS"))
+    if err != nil { width = 80 }
+  }
+
+  if (width < 1) { // protect against nonsense values
+    width = 80
+  }
+
+  if (width > 10000) { // protect against overflow in the following computation
+    width = 10000
+  }
+
+  last_column_min_width := ((width * LastColumnMinPercent) + 50) / 100
+  last_column_own_line_max_width := ((width * LastColumnOwnLineMaxPercent) + 50) / 100
+  if (last_column_own_line_max_width == 0) {
+    last_column_own_line_max_width = 1
+  }
+
+  part := usage.Iterate()
+  
+  for part.NextTable() {
+
+    /***************** Determine column widths *******************************/
+
+    const maxcolumns = 8; // 8 columns are enough for everyone
+    var col_width [maxcolumns]int
+    var lastcolumn int
+    var leftwidth int
+    overlong_column_threshold := 10000
+    
+    for {
+      lastcolumn = 0;
+      for i := 0; i < maxcolumns; i++ {
+        col_width[i] = 0
+      }
+
+      part.RestartTable();
+      for part.NextRow() {
+        for part.NextPart() {
+          if part.Column() < maxcolumns {
+            upmax(&lastcolumn, part.Column())
+            if part.ScreenLength() < overlong_column_threshold {
+              // We don't let rows that don't use table separators (\t or \v) influence
+              // the width of column 0. This allows the user to interject section headers
+              // or explanatory paragraphs that do not participate in the table layout.
+              if (part.Column() > 0 || part.Subrow() > 0 || part.PartTerminator() == '\t' ||
+                part.PartTerminator() == '\v') {
+                upmax(&col_width[part.Column()], part.ScreenLength())
+              }
+            }
+          }
+        }
+      }
+
+      /*
+       * If the last column doesn't fit on the same
+       * line as the other columns, we can fix that by starting it on its own line.
+       * However we can't do this for any of the columns 0..lastcolumn-1.
+       * If their sum exceeds the maximum width we try to fix this by iteratively
+       * ignoring the widest line parts in the width determination until
+       * we arrive at a series of column widths that fit into one line.
+       * The result is a layout where everything is nicely formatted
+       * except for a few overlong fragments.
+       * */
+
+      leftwidth = 0;
+      overlong_column_threshold = 0;
+      for i := 0; i < lastcolumn; i++ {
+        leftwidth += col_width[i];
+        upmax(&overlong_column_threshold, col_width[i]);
+      }
+
+      if (leftwidth <= width) { break }
+    }
+
+    /**************** Determine tab stops and last column handling **********************/
+
+    var tabstop [maxcolumns]int
+    tabstop[0] = 0;
+    for i := 1; i < maxcolumns; i++ {
+      tabstop[i] = tabstop[i - 1] + col_width[i - 1];
+    }
+
+    rightwidth := width - tabstop[lastcolumn]
+    print_last_column_on_own_line := false
+    if rightwidth < last_column_min_width && rightwidth < col_width[lastcolumn] {
+      print_last_column_on_own_line = true;
+      rightwidth = last_column_own_line_max_width;
+    }
+
+    // If lastcolumn == 0 we must disable print_last_column_on_own_line because
+    // otherwise 2 copies of the last (and only) column would be output.
+    // Actually this is just defensive programming. It is currently not
+    // possible that lastcolumn==0 and print_last_column_on_own_line==true
+    // at the same time, because lastcolumn==0 => tabstop[lastcolumn] == 0 =>
+    // rightwidth==width => rightwidth>=last_column_min_width  (unless someone passes
+    // a bullshit value >100 for last_column_min_percent) => the above if condition
+    // is false => print_last_column_on_own_line==false
+    if lastcolumn == 0 {
+      print_last_column_on_own_line = false
+    }
+
+    lastColumnLineWrapper := NewColumnWrapper(width - rightwidth, width)
+    interjectionLineWrapper := NewColumnWrapper(0, width)
+
+    part.RestartTable()
+
+    /***************** Print out all rows of the table *************************************/
+
+    for part.NextRow() {
+      x := -1
+      for part.NextPart() {
+        if part.Column() > lastcolumn {
+          continue; // drop excess columns (can happen if lastcolumn == maxcolumns-1)
+        }
+
+        if (part.Column() == 0) {
+          if (x >= 0) {
+            write.Write(newline);
+          }
+          x = 0
+        }
+
+        indent(write, &x, tabstop[part.Column()])
+
+        if ((part.Column() < lastcolumn) && (part.Column() > 0 || part.Subrow() > 0 || part.PartTerminator() == '\t' || 
+            part.PartTerminator() == '\v')) {
+          io.WriteString(write, part.Data())
+          x += part.ScreenLength()
+          
+        } else { // either part.Column() == lastcolumn or we are in the special case of
+                 // an interjection that doesn't contain \v or \t
+
+          // NOTE: This code block is not necessarily executed for
+          // each line, because some rows may have fewer columns.
+
+          var lineWrapper *ColumnWrapper
+          if (part.Column() == 0) {
+            lineWrapper = interjectionLineWrapper
+          } else {
+            lineWrapper = lastColumnLineWrapper
+          }
+
+          if (!print_last_column_on_own_line) {
+            lineWrapper.Process(write, part.Data())
+          }
+        }
+      } // for
+
+      if print_last_column_on_own_line {
+        part.RestartRow();
+        for part.NextPart() {
+          if (part.Column() == lastcolumn) {
+            write.Write(newline)
+            foo := 0;
+            indent(write, &foo, width - rightwidth);
+            lastColumnLineWrapper.Process(write, part.Data())
+          }
+        }
+      }
+
+      write.Write(newline);
+      lastColumnLineWrapper.Flush(write);
+      interjectionLineWrapper.Flush(write);
+    }
+  }  
+  
+  return strings.Join(*write, "")
 }
 
 /*
