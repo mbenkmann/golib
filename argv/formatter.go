@@ -23,6 +23,7 @@
 package argv
 
 import (
+         "io"
          "os"
          "fmt"
          "strconv"
@@ -352,6 +353,172 @@ func formatUsage(usage Usage) string {
   return fmt.Sprintf("%v", columns)
 }
 
+/*
+ A buffer for formatting output to fit into a column. Text can be pushed into the
+ buffer in arbitrary sized chunks and will be broken up into appropriate chunks
+ for writing a column of a given width one line at a time, so that the writing
+ can be interleaved with data from other colums.
+ 
+ The following example makes this clearer:
+
+    Column 1,1    Column 2,1     This is a long text
+    Column 1,2    Column 2,2     that does not fit into
+                                 a single line.
+ 
+ The difficulty in producing this output is that the whole string
+ "This is a long text that does not fit into a single line" is the
+ 1st and only part of column 3. In order to produce the above
+ output the 3rd column's data must be output piecemeal, interleaved with
+ the data from the other 2 columns. This is where the ColumnWrapper
+ comes in. The 3rd column's text can be written into the ColumnWrapper
+ and the ColumnWrapper will wrap it for the width of the column and
+ chunk the output for interleaving with the other columns.
+ 
+ When flushing the final part of 3rd column's data ("a single line.")
+ the ColumnWrapper will produce indendation to substitute for the
+ other 2 columns which do not have content for a 3rd line of output.
+*/
+type ColumnWrapper struct {
+  // Buffer for storing line-wrapped output chunks. New chunks are
+  // appended to the buffer.
+  buf []string
+
+  // buf[next] is the next to chunk to output. If next == len(buf) the buffer is empty.
+  next int
+
+  /*
+   The indentation of the column to which the LineBuffer outputs. LineBuffer
+   assumes that the indentation has already been written when Process()
+   is called, so this value is only used when a buffer flush requires writing
+   additional lines of output.
+  */
+  x int
+  
+  // The width of the column to wrap.
+  width int
+}
+
+/*
+ Writes a single line of output from the buffer to write.
+ If start_new_line == true, a newline and indentation are written first.
+*/
+func (w *ColumnWrapper) write_one_line(write io.Writer, start_new_line bool) {
+  if start_new_line {
+    write.Write(newline)
+    foo := 0
+    indent(write, &foo, w.x)
+  }
+
+  if w.next < len(w.buf) {
+    io.WriteString(write, w.buf[w.next])
+    w.next++
+    // if at least half the buffer is empty, compact it
+    if w.next + w.next > len(w.buf) {
+      w.buf = w.buf[0:copy(w.buf, w.buf[w.next:])]
+      w.next = 0
+    }
+  }
+}
+
+/*
+ Writes out all remaining data from the ColumnWrapper using write.
+ Unlike Process() this method indents all lines including the first and
+ will output a '\n' at the end (but only if something has been written).
+*/
+func (w *ColumnWrapper) Flush(write io.Writer) {
+  if w.next < len(w.buf) {
+    foo := 0
+    indent(write, &foo, w.x)
+
+    if w.next < len(w.buf) {
+      w.write_one_line(write, false)
+    }
+    
+    for w.next < len(w.buf) {
+      w.write_one_line(write, true)
+    }
+    write.Write(newline)
+  }
+}
+
+/*
+ Process, wrap and output the next piece of data.
+ 
+ Process() will output exactly one line of output. This is not necessarily
+ the data passed in. It may be data queued from a prior call to Process().
+ 
+ Process() assumes that the a proper amount of indentation has already been
+ output. It won't write any further indentation.
+ 
+ NOTE: No '\n' is written by this method after the last line that is written.
+*/
+func (w *ColumnWrapper) Process(write io.Writer, data string) {
+  for data != "" {
+    if len(data) <= w.width { // quick test that works because utf8width <= len (all wide chars have at least 2 bytes)
+      w.buf = append(w.buf, data)
+      data = ""
+    } else { // if (len(data) > width)  it's possible (but not guaranteed) that utf8width > width
+      utf8width := 0
+      maxi := 0
+      for maxi < len(data) && utf8width < w.width {
+        charbytes := 1
+        startbyte := data[maxi]
+        if startbyte > 0xC1 { // everything <= 0xC1 (yes, even 0xC1 itself) is not a valid UTF-8 start byte
+          ch := uint(clear_utf8_len(startbyte)) 
+          for maxi+charbytes < len(data) && data[maxi+charbytes] ^ 0x80 <= 0x3F { // while next byte is continuation byte
+            ch = (ch << 6) ^ uint(data[maxi + charbytes] ^ 0x80) // add continuation to char code
+            charbytes++
+          }
+          // ch is the decoded unicode code point
+          if (ch >= 0x1100 && isWideChar(ch)) { // the test for 0x1100 is here to avoid the function call in the Latin case
+            if (utf8width + 2 > w.width) {
+              break
+            }
+            utf8width++
+          }
+        }
+        utf8width++
+        maxi += charbytes
+      }
+
+      // data[maxi-1] is the last byte of the UTF-8 sequence of the last character that fits
+      // onto the 1st line. If maxi == len, all characters fit on the line.
+
+      if maxi == len(data) {
+        w.buf = append(w.buf, data)
+        data = ""
+      } else { // if (maxi < len)  at least 1 character (data[maxi] that is) doesn't fit on the line
+        
+        // try to find a ' ' as split point
+        i := maxi
+        for i >= 0 {
+          if data[i] == ' ' { break }
+          i--
+        }
+
+        if i >= 0 { // if we found a ' ' as split point
+          w.buf = append(w.buf, data[:i])
+          data = data[i+1:] // i+1 because we discard the ' '
+        } else // did not find a space to split at => split before data[maxi]
+        { // data[maxi] is always the beginning of a character, never a continuation byte
+          w.buf = append(w.buf, data[:maxi])
+          data = data[maxi:] // NOT maxi+1 ! We don't discard a character here.
+        }
+      }
+    }
+  }
+  
+  w.write_one_line(write, false) // write one line of actual output
+}
+
+// Creates a new ColumnWrapper that wraps a column whose first character
+// has x coordinate x1 and whose last character has x coordinate x2-1.
+func NewColumnWrapper(x1, x2 int) *ColumnWrapper {
+  width := x2 - x1
+  // because of wide characters we need at least width 2 or the code breaks
+  if width < 2 { width = 2 }
+  return &ColumnWrapper{x:x1, width:width}
+}
 
 // Returns b with leading 1 bits (which determine the length of a
 // UTF-8 byte sequence) cleared.
@@ -406,4 +573,30 @@ func isWideChar(ch uint) bool {
           (0xFE10 <= ch && ch <= 0xFE6B) || (0xFF01 <= ch && ch <= 0xFF60) || (0xFFE0 <= ch && ch <= 0xFFE6) ||
           (0x1B000 <= ch));
 }
-                   
+
+/*
+ Moves the "cursor" to column want_x assuming it is currently at column x
+ and sets x=want_x .
+ 
+ If x > want_x , a line break is output before indenting.
+ 
+ Arguments:
+  write Spaces and possibly a line break are written here  to get the desired indentation want_x .
+  x the current indentation. Set to want_x by this function.
+  want_x the desired indentation.
+*/
+func indent(write io.Writer, x *int, want_x int) {
+  indent := want_x - *x
+  if indent < 0 {
+    write.Write(newline)
+    indent = want_x
+  }
+
+  if indent > 0 {
+    for i := 0; i < indent; i++ { write.Write(space) }
+    *x = want_x
+  }
+}
+
+var newline = []byte{'\n'}
+var space = []byte{' '}
