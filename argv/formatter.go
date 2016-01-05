@@ -456,7 +456,9 @@ func formatUsage(usage Usage) string {
 
     rightwidth := width - tabstop[lastcolumn]
     print_last_column_on_own_line := false
-    if rightwidth < last_column_min_width && rightwidth < col_width[lastcolumn] {
+    if rightwidth < last_column_min_width &&  // if we don't have the minimum requested width for the last column
+       ( col_width[lastcolumn] == 0 ||        // and all last columns are > overlong_column_threshold
+       rightwidth < col_width[lastcolumn]) {  // or there is at least one last column that requires more than the space available
       print_last_column_on_own_line = true;
       rightwidth = last_column_own_line_max_width;
     }
@@ -514,7 +516,7 @@ func formatUsage(usage Usage) string {
             lineWrapper = lastColumnLineWrapper
           }
 
-          if (!print_last_column_on_own_line) {
+          if (!print_last_column_on_own_line || part.Column() != lastcolumn) {
             lineWrapper.Process(write, part.Data())
           }
         }
