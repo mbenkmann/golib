@@ -222,6 +222,21 @@ runes.ENCODING_8BIT,
 nil,
 },
 
+Test{ // 26
+runes.ENCODING_UTF8,
+[]byte{0xC1, 0x80},
+[]rune{runes.GARBAGE+0xC1, runes.GARBAGE+0x80, runes.EOF},
+nil,
+},
+
+Test{ // 27
+runes.ENCODING_UTF8,
+[]byte{0xC0, 0x80},
+[]rune{runes.Overlong0[0], runes.Overlong0[1], runes.EOF},
+nil,
+},
+
+
 }
 
 

@@ -61,6 +61,30 @@ const ENCODING_UTF16LE = 4
 // UTFReader.Encoding() returns this when auto-detection has found UTF-16 big-endian.
 const ENCODING_UTF16BE = 12
 
+// This sequence of error runes is returned by UTFReader when it encounters the
+// overlong 2 bytes encoding of U+0000. It is provided for convenience because
+// this encoding is used by some systems to avoid actual 0 bytes. If you need to
+// handle this form of modified UTF-8, you can special case this sequence of
+// error runes returned from UTFReader.
+var Overlong0 = [2]rune{GARBAGE+0xC0, GARBAGE+0x80}
+
+// The UTF-8 standard requires that each codepoint be encoded with the minimum
+// number of bytes. MinCodePointForUTFLength[N] is the smallest codepoint that
+// can validly be encoded with N bytes.
+// UTF8Reader uses this array to diagnose overlong encodings.
+var minCodepointForUTF8Length = [5]rune{0,0,0x80,0x800,0x10000}
+
+// Returns true if r is a legal codepoint for UTF-8 and UTF-16.
+// It will return false for error runes returned by UTFReader.
+// It will also return false for non-error runes returned by
+// UTFReader that represent codepoints that derive from
+// technically sound UTF-8 encodings that can not be encoded
+// as UTF-16 and are therefore declared illegal by the standard
+// even for UTF-8.
+func IsUTFLegal(r rune) bool {
+  return (r >= 0 && r <= 0xD7FF) || (r >= 0xE000 && r <= 0x10FFF)
+}
+
 // A stream of runes. Errors are returned as runes as part
 // of the stream instead of as out-of-band error-type returns.
 type Reader interface {
@@ -187,6 +211,28 @@ func Make8BitTable(charset string) *[256]rune {
 // with the next byte (after returning a special error rune).
 // Because of the auto-syncing properties of UTF, if the input is
 // at least partially correct UTF, the decoding will recover.
+//
+// Handling of UTF-8 errors:
+//
+//   * The UTF-8 standard mandates that each codepoint be encoded
+//     with the minimum number of bytes. UTFReader recognizes
+//     overlong encodings and returns them as error runes.
+//     This guarantees that no information is lost and the original
+//     byte sequence from the underlying stream can be recovered
+//     from the runes returned by UTFReader.
+//   * Of particular note is the overlong 2 byte encoding of
+//     U+0000 which is used by some systems to avoid actual 0 bytes
+//     in the encoding.
+//     For your convenience the array runes.Overlong0 contains
+//     the error runes returned by UTFReader when it encounters
+//     this encoding, so you can special case it if desired.
+//   * Some codepoints are declared illegal by the UTF-8 standard
+//     for compatibility with UTF-16, which can not encode these
+//     codepoints. UTFReader rejects codepoints >0x13ffff (returning
+//     them as error runes) but other than that does not diagnose
+//     this class of illegal codepoints. You can use the
+//     function IsUTFLegal() to check if a codepoint is legal.
+//   
 func NewUTFReader(r io.Reader) *UTFReader {
   return &UTFReader{r:r}
 }
@@ -285,7 +331,8 @@ func (u *UTFReader) ReadRune() rune {
           return rune(b)
         }
         
-        if b <= 0xC0 { // 0b11000000
+        if b < 0xC0 { // 0b11000000
+          // an unexpected continuation byte => garbage
           u.rest = u.rest[1:]
           return GARBAGE + rune(b)
         }
@@ -304,11 +351,12 @@ func (u *UTFReader) ReadRune() rune {
         
         need++
         
-        if b < 0xF8 { // 0b11111000
+        if b < 0xF5 { // 0b11110101  All codes starting with F5 (and higher) are invalid
           continue
         }
         
-        // b is not a valid start byte because encodings with more than 4 bytes are not permitted by RFC3629
+        // b is not a valid start byte because a sequence starting with it would lead
+        // to a codepoint that is out of the range of codepoints permitted by RFC3629
         u.rest = u.rest[1:]
         return GARBAGE + rune(b)
         
@@ -326,14 +374,25 @@ func (u *UTFReader) ReadRune() rune {
         }
         
         // we have collected (and verified) all parts of the rune => assemble it
-        rest := u.rest
-        u.rest = u.buf[0:0]
-        r := rune((rest[0] << uint(need)) >> uint(need)) // clear start byte marker bits
-        r = (r << 6) + rune(rest[1] ^ 0x80)
-        if need == 2 { return r }
-        r = (r << 6) + rune(rest[2] ^ 0x80)
-        if need == 3 { return r }
-        return (r << 6) + rune(rest[3] ^ 0x80)
+        r := rune((u.rest[0] << uint(need)) >> uint(need)) // clear start byte marker bits
+        r = (r << 6) + rune(u.rest[1] ^ 0x80)
+        if need > 2 {
+          r = (r << 6) + rune(u.rest[2] ^ 0x80)
+          if need > 3 {
+            r = (r << 6) + rune(u.rest[3] ^ 0x80)
+          }
+        }
+        
+        if r >= minCodepointForUTF8Length[need] {
+          u.rest = u.rest[need:]
+          return r
+        } else { // overlong encoding => return 1st byte of rest as garbage.
+                 // The other bytes will also be returned as garbage on further calls because they
+                 // are continuation bytes.
+          b = u.rest[0]
+          u.rest = u.rest[1:]
+          return GARBAGE + rune(b)
+        }
       }
     }
     
