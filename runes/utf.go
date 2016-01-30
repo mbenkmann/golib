@@ -486,7 +486,7 @@ func (u *UTFReader) ReadRune() rune {
         }
         
         u.rest = u.buf[0:0]
-        return r - 0xDC00 + ((highsurrogate - 0xD800) << 10)
+        return 0x10000 + r - 0xDC00 + ((highsurrogate - 0xD800) << 10)
       }
     }
   }
