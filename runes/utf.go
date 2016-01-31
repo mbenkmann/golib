@@ -141,6 +141,10 @@ type UTFReader struct {
   // lost while processing previously buffered bytes.
   eof rune
   
+  // If an IO error is encountered it will be stored here.
+  // Can be read via IOError() method.
+  ioerror error
+  
   // Translation table for ENCODING_8BIT mode.
   trans *[256]rune
 }
@@ -237,10 +241,20 @@ func NewUTFReader(r io.Reader) *UTFReader {
   return &UTFReader{r:r}
 }
 
+// If UTFReader encounters an IO error while reading from the
+// underlying byte stream, it can be retrieved with this function.
+// Note that because of buffering this function may return
+// non-nil before ReadRune() has returned the corresponding
+// error rune. You should not use this to control read loops.
+func (u *UTFReader) IOError() error {
+  return u.ioerror
+}
+
 // Returns the next rune. See runes.Reader for details.
 func (u *UTFReader) ReadRune() rune {
   if u.enc == ENCODING_UNKNOWN {
     n, err := io.ReadFull(u.r, u.buf[0:2])
+    u.ioerror = err
     if err == io.EOF { // empty document
       u.enc = ENCODING_UTF8
       u.eof = EOF
@@ -303,6 +317,7 @@ func (u *UTFReader) ReadRune() rune {
         }
         
         n, err := u.r.Read(u.rest[len(u.rest):len(u.rest)+1])
+        u.ioerror = err
         if err != nil {
           if err != io.EOF { 
             u.eof = UNSPECIFIC_IO_ERROR
@@ -419,6 +434,7 @@ func (u *UTFReader) ReadRune() rune {
         }
         
         n, err := io.ReadFull(u.r, u.rest[len(u.rest):len(u.rest)+2])
+        u.ioerror = err
         if n == 0 {
           if err == io.EOF {
             u.eof = EOF
