@@ -242,7 +242,7 @@ func (o *Option) Last() *Option {
   Otherwise this function returns nil. Also returns nil if o is undefined.
 */
 func (o *Option) Next() *Option {
-  if o == nil || o.next == nil { return nil }
+  if o == nil || o.next == nil || !o.isNotLast { return nil }
   return o.next
 }
 
