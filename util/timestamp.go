@@ -23,6 +23,9 @@
 package util
 
 import "time"
+import "fmt"
+import "strings"
+import "strconv"
 
 // Converts t into a timestamp appropriate for use in siserver messages.
 // The timestamp loses the time zone information of t. No time zone
@@ -61,4 +64,49 @@ func ParseTimestamp(ts string) time.Time {
     return time.Unix(0,0)
   }
   return t
+}
+
+// Takes a timestamp ts in the format produced by MakeTimestamp and
+// adds to it an offset adder in the following
+// format:
+//   <integer>_seconds
+//   <integer>_minutes
+//   <integer>_hours
+//   <integer>_days
+//   <integer>_weeks
+//   <integer>_months
+//   <integer>_years
+//
+// where <integer> is any integer (may be negative).
+// Example: AddTimestamp("20170201120000", "-3_seconds")
+//          returns "20170201115957"
+//
+// If ts is invalid, time.Unix(0,0) is assumed and an error
+// is logged (behavior of ParseTimestamp()).
+// If adder is invalid, the timestamp is returned unchanged
+// together with an error.
+func AddTimestamp(ts string, adder string) (string, error) {
+  t := ParseTimestamp(ts)
+  p := strings.Split(adder, "_")
+  if len(p) != 2 {
+    return ts, fmt.Errorf("Invalid timestamp offset: \"%v\"", adder)
+  }
+  offset, err := strconv.ParseInt(p[0], 10, 64)
+  if err != nil {
+    return ts, fmt.Errorf("Invalid timestamp offset: \"%v\": %v", adder, err)
+  }
+  
+  switch p[1] {
+    case "seconds": t = t.Add(time.Duration(offset) * time.Second)
+    case "minutes": t = t.Add(time.Duration(offset) * time.Minute)
+    case "hours":   t = t.Add(time.Duration(offset) * time.Hour)
+    case "days":    t = t.AddDate(0,0,int(offset))
+    case "weeks":   t = t.AddDate(0,0,int(offset*7))
+    case "months":  t = t.AddDate(0,int(offset),0)
+    case "years":   t = t.AddDate(int(offset),0,0)
+    default:
+         return ts, fmt.Errorf("Unknown timestamp offset unit: \"%v\"", p[1])
+  }
+  
+  return MakeTimestamp(t), nil
 }
