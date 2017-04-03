@@ -29,11 +29,11 @@ in() is passed an index into a width*height array that is assumed to hold the
 pixel data and is expected to return true if the respective pixel is to be filled.
 Returns a slice with one entry for each y coordinate (i.e. height entries in total).
 Each entry is a slice of uints that encode a part of the line to be filled as follows
-  u & 0xFFFF  is the x coordinate of the first pixel to be colored
-  u >> 16     is the x coordinate of the last pixel to be colored 
+  i & 0xFFFF  is the x coordinate of the first pixel to be colored
+  i >> 16     is the x coordinate of the last pixel to be colored 
 */
-func FloodFill(x,y, width, height int, in func(int)bool) [][]uint {
-  res := make([][]uint, height)
+func FloodFill(x,y, width, height int, in func(int)bool) [][]int {
+  res := make([][]int, height)
   if x < 0 || x >= width || y < 0 || y >= height { return res }
   idx := width * y + x
   if !in(idx) { return res }
@@ -51,7 +51,7 @@ func FloodFill(x,y, width, height int, in func(int)bool) [][]uint {
   var dir = [2]int{-1,1}
   
   line := x0|(x<<16)
-  res[y] = append(res[y], uint(line))
+  res[y] = append(res[y], line)
   
   for i := 0; i <= 1; i++ {
     if y+dir[i] >= 0 && y+dir[i] < height {
@@ -101,7 +101,7 @@ func FloodFill(x,y, width, height int, in func(int)bool) [][]uint {
                 idx++
               }
               line |= x0 << 16
-              res[y] = append(res[y], uint(line))
+              res[y] = append(res[y], line)
               if y+dir[i] >= 0 && y+dir[i] < height {
                 todo[i] = append(todo[i], y+dir[i], line)
               }
@@ -133,7 +133,7 @@ func FloodFill(x,y, width, height int, in func(int)bool) [][]uint {
     3) the result are multiple disjoint ranges => returns one of them and appends
        to *overflow for each range y followed by (a|b<<16).
 */
-func rangesubtract(x1,x2 int, lines []uint, y int, overflow *[]int) (int,int) {
+func rangesubtract(x1,x2 int, lines []int, y int, overflow *[]int) (int,int) {
   ranges := []int{x1,x2}
   for _, l := range lines {
     l1 := int(l & 0xFFFF)
