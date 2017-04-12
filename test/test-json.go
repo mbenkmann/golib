@@ -32,6 +32,11 @@ e: { "f":"bar", "g": 99
       }`,
 ` `,
 `  {  }`,
+`a=99
+foobar=true
+blafasel=["1","2","3"]
+goro: onan
+`,
 }
 
 func main() {

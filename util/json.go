@@ -67,7 +67,7 @@ func AlmostJSON(s string) []byte {
                 }
                 continue
       case ',': comma = 0 // no double commas
-      case ':': comma = 1
+      case ':',']','}': comma = 1
       case '=': comma = 1
                 c = ':'
       case '\n' : if comma == 1 { comma = 2 }
