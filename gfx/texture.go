@@ -26,10 +26,14 @@ import "unsafe"
 import "github.com/veandco/go-sdl2/sdl"
 
 const (
-  rmask uint32 = 255 << 16
-  gmask uint32 = 255 << 8
-  bmask uint32 = 255 << 0
-  amask uint32 = 255 << 24
+  // Mask the red bits in an RGBA uint32.
+  RMask uint32 = 255 << 16
+  // Mask the green bits in an RGBA uint32.
+  GMask uint32 = 255 << 8
+  // Mask the blue bits in an RGBA uint32.
+  BMask uint32 = 255 << 0
+  // Mask the alpha bits in an RGBA uint32.
+  AMask uint32 = 255 << 24
 )
 
 // Takes a slice of width*height RGBA pixels and creates a Texture from it.
@@ -39,7 +43,7 @@ const (
 //   bits 8..15  G
 //   bits 0..7   B
 func TextureFromRGBA(renderer *sdl.Renderer,image []uint32, width, height int32) *sdl.Texture {
-  surface, err := sdl.CreateRGBSurfaceFrom(unsafe.Pointer(&image[0]), int(width), int(height), 32, int(width)<<2, rmask, gmask, bmask, amask)
+  surface, err := sdl.CreateRGBSurfaceFrom(unsafe.Pointer(&image[0]), int(width), int(height), 32, int(width)<<2, RMask, GMask, BMask, AMask)
   if err != nil { panic(err) }
   defer surface.Free()
   t, err := renderer.CreateTextureFromSurface(surface)
