@@ -38,25 +38,26 @@ const RTREE_NODE_SIZE = 16
 /*
   A tree for storing SDL rectangles. Note that this is not one of the common
   types of R-Tree. It has the following properties:
-  - It is NOT balanced. The distance from root to leaf may vary.
-  - Payload may be stored in inner nodes as well as leaves.
-  - Nodes that carry Payload may not be resized (because the Payload is assumed
-    to apply to the exact rectangle). If such a node needs to
-    grow a parent node will be introduced.
-  - When growing nodes the tree favors minimizing circumference over minimizing area.
-    This favors more square rectangles.
-  - Node overflows are handled by merging children, not by splitting the node.
-  - When a node overflows Merge() examines all pairs of children to find
-    the "best" pair to merge. This means insertion is O(n²).
-  - It's completely based on my intuition about what would be a good data
-    structure for my particular use case (managing a computer game world made up of
-    images of different sizes). There's no science behind it.
-    The central idea is to have the tree consist mostly of the actual rectangles
-    from the component images that form the world. E.g. if there is a house with a
-    tree in front with a flower in front, it makes sense to represent this in
-    the tree. That this makes the tree unbalanced is irrelevant since we are
-    working in memory and following a child pointer is as fast as following a
-    sibling pointer.
+
+    - It is NOT balanced. The distance from root to leaf may vary.
+    - Payload may be stored in inner nodes as well as leaves.
+    - Nodes that carry Payload may not be resized (because the Payload is assumed
+      to apply to the exact rectangle). If such a node needs to
+      grow a parent node will be introduced.
+    - When growing nodes the tree favors minimizing circumference over minimizing area.
+      This favors more square rectangles.
+    - Node overflows are handled by merging children, not by splitting the node.
+    - When a node overflows Merge() examines all pairs of children to find
+      the "best" pair to merge. This means insertion is O(n²).
+    - It's completely based on my intuition about what would be a good data
+      structure for my particular use case (managing a computer game world made up of
+      images of different sizes). There's no science behind it.
+      The central idea is to have the tree consist mostly of the actual rectangles
+      from the component images that form the world. E.g. if there is a house with a
+      tree in front with a flower in front, it makes sense to represent this in
+      the tree. That this makes the tree unbalanced is irrelevant since we are
+      working in memory and following a child pointer is as fast as following a
+      sibling pointer.
 */
 type RTree struct {
   // If Payload != nil, this is the rectangle that applies to the Payload, e.g.
