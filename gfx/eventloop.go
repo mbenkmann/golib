@@ -22,6 +22,7 @@
 // Graphics related algorithms and data structures.
 package gfx
 
+import "time"
 import "github.com/veandco/go-sdl2/sdl"
 
 const (
