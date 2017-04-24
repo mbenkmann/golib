@@ -109,10 +109,18 @@ func debVersionPartCompare(v1,v2 string) int {
       if e1 == nil && e2 == nil {
         c1 = num1
         c2 = num2
-        // if k1 != k2 usually c1 != c2, if not for leading 0s, so
-        // we will exit the loop and i doesn't matter.
-        // if there are leading 0s, the comparison result will be messed
-        // up, but who cares. GIGO.
+        // Fucked up special case. Numbers are the same but use different
+        // number of leading 0s, e.g. "1.0-1" and "1.0000-1". I wouldn't support
+        // this were it not for the fact that the test suite for dpkg contains
+        // test cases for this, so apparently someone cares.
+        if c1 == c2 && k1 != k2 {
+          if k1 > k2 { // v1 has more leading 0s
+            v1 = v1[k1-k2:]
+            k1 = k2
+          } else { // v2 has more leading 0s
+            v2 = v2[k2-k1:]
+          }
+        }
         i = k1-1 // -1 because we increment later
       }
     }
