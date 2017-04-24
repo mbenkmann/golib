@@ -59,7 +59,7 @@ func debSplit(v1 string) (epoch, vers, rev string) {
   }
   rev1i :=  strings.LastIndex(v1, "-")
   rev = "0"
-  if rev1i > 0 {
+  if rev1i >= 0 {
     rev = v1[rev1i+1:]
     v1 = v1[0:rev1i]
   }
