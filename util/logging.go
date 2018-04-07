@@ -28,8 +28,8 @@ import (
          "time"
          "sync/atomic"
          
-         "github.com/mbenkmann/golib/deque"
-         "github.com/mbenkmann/golib/bytes"
+         "winterdrache.de/golib/deque"
+         "winterdrache.de/golib/bytes"
        )
 
 // The loggers used by util.Log(). 
