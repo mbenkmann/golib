@@ -20,7 +20,7 @@
  */
 
 // Various re-usable utility functions.
-package util
+package util // import "winterdrache.de/golib/util"
 
 import (
          "io"

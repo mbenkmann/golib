@@ -150,7 +150,7 @@
 //       deliberate, because "overflow" is a condition where some data is lost
 //       but BlockIfFull() does not lose data because eventually
 //       the item will be written to the queue.
-package deque
+package deque // import "winterdrache.de/golib/deque"
 
 import (
           "fmt"

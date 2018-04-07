@@ -21,7 +21,7 @@
 
 
 // Alternative to the Go standard lib's bytes package that avoids the GC problems.
-package bytes
+package bytes // import "winterdrache.de/golib/bytes"
 
 /*
 #include <stdlib.h>

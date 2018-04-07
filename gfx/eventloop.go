@@ -20,7 +20,7 @@
  */
 
 // Graphics related algorithms and data structures.
-package gfx
+package gfx // import "winterdrache.de/golib/gfx"
 
 import "time"
 import "github.com/veandco/go-sdl2/sdl"

@@ -20,7 +20,7 @@
  */
 
 // Convert files in a variety of encodings into a sequence of runes.
-package runes
+package runes // import "winterdrache.de/golib/runes"
 
 import (
          "io"

@@ -20,7 +20,7 @@
  */
 
 
-package argv
+package argv // import "winterdrache.de/golib/argv"
 
 import (
          "fmt"
