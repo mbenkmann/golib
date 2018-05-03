@@ -43,7 +43,7 @@ const (
 //   bits 8..15  G
 //   bits 0..7   B
 func TextureFromRGBA(renderer *sdl.Renderer,image []uint32, width, height int32) *sdl.Texture {
-  surface, err := sdl.CreateRGBSurfaceFrom(unsafe.Pointer(&image[0]), int(width), int(height), 32, int(width)<<2, RMask, GMask, BMask, AMask)
+  surface, err := sdl.CreateRGBSurfaceFrom(unsafe.Pointer(&image[0]), width, height, 32, int(width)<<2, RMask, GMask, BMask, AMask)
   if err != nil { panic(err) }
   defer surface.Free()
   t, err := renderer.CreateTextureFromSurface(surface)
