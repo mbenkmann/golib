@@ -3,7 +3,7 @@ package main
 import "time"
 import "runtime"
 import "../gfx"
-import "github.com/veandco/go-sdl2/sdl"
+import "winterdrache.de/bindings/sdl"
 
 const (
   winTitle       = "Test"
@@ -54,26 +54,24 @@ func main() {
   var renderer *sdl.Renderer
   var event sdl.Event
   var running bool
-  var err error
   runtime.LockOSThread()
-  if err = sdl.Init(sdl.INIT_EVERYTHING); err != nil {
-    panic(err)
+  if sdl.Init(sdl.INIT_EVERYTHING) < 0 {
+    panic(sdl.GetError())
   }
   defer sdl.Quit()
-  window, err = sdl.CreateWindow(winTitle, sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, winWidth, winHeight, sdl.WINDOW_SHOWN|sdl.WINDOW_RESIZABLE)
-  if err != nil {
-    panic(err)
+  window = sdl.CreateWindow(winTitle, sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, winWidth, winHeight, sdl.WINDOW_SHOWN|sdl.WINDOW_RESIZABLE)
+  if window == nil {
+    panic(sdl.GetError())
   }
   defer window.Destroy()
   
-  renderer, err = sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED/*|sdl.RENDERER_PRESENTVSYNC*/)
-  if err != nil {
-    panic(err)
+  renderer = window.CreateRenderer(-1, sdl.RENDERER_ACCELERATED/*|sdl.RENDERER_PRESENTVSYNC*/)
+  if renderer == nil {
+    panic(sdl.GetError())
   }
   
-  err = renderer.SetLogicalSize(logWidth, logHeight)
-  if err != nil {
-    panic(err)
+  if renderer.SetLogicalSize(logWidth, logHeight) < 0 {
+    panic(sdl.GetError())
   }
   
   texture_r = gfx.TextureFromRGBA(renderer, letter_r, 5, 6)
@@ -84,9 +82,8 @@ func main() {
   for running {
     time.Sleep(15*time.Millisecond)
     
-    for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-      switch event.(type) {
-      case *sdl.QuitEvent:
+    for sdl.PollEvent(&event) {
+      if event.Type() == sdl.QUIT {
         running = false
       }
     }

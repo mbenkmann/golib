@@ -23,7 +23,7 @@
 package gfx // import "winterdrache.de/golib/gfx"
 
 import "time"
-import "github.com/veandco/go-sdl2/sdl"
+import "winterdrache.de/bindings/sdl"
 
 const (
   // Time per frame.
@@ -116,7 +116,8 @@ func EventLoop(renderer *sdl.Renderer, evhandlers []EventHandler, framers []Fram
     
     DroppedFrames += frame - lastframe - 1
     
-    for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+    var event sdl.Event
+    for sdl.PollEvent(&event) {
       for _, handler := range evhandlers {
         consume,quit := handler.Handle(event)
         if quit { running = false }
@@ -154,8 +155,8 @@ func EventLoop(renderer *sdl.Renderer, evhandlers []EventHandler, framers []Fram
 type quitter struct{}
 
 func (*quitter) Handle(event sdl.Event) (consume, quit bool) {
-  switch event.(type) {
-    case *sdl.QuitEvent: return true, true
+  if event.Type() == sdl.QUIT {
+    return true, true
   }
   return false,false
 }

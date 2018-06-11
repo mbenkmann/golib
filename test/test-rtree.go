@@ -1,7 +1,7 @@
 package main
 
 import "../gfx"
-import "github.com/veandco/go-sdl2/sdl"
+import "winterdrache.de/bindings/sdl"
 import "fmt"
 import "sort"
 import "math/rand"
@@ -31,11 +31,11 @@ func main() {
   
   tree = &gfx.RTree{Rect:sdl.Rect{0,0,100,100}}
   objs := make([]*gfx.RTree,100)
-  typ := make([]int32,100)
-  var x,y int32 
+  typ := make([]int,100)
+  var x,y int
   for x = 0; x < 10; x++ {
     for y = 0; y < 10; y++ {
-      var d int32 = (x+y)&1
+      var d = (x+y)&1
       objs[y*10+x] = &gfx.RTree{Rect:sdl.Rect{x*10-d,y*10-d,10+d+d,10+d+d}, Payload:y*10+x+1}
       typ[y*10+x] = d
     }
@@ -60,8 +60,8 @@ func main() {
   tree2 = &gfx.RTree{Rect:sdl.Rect{0,0,100,100}}
   for _, x := range ofs {
     for _, y := range ofs {
-      dx := int32(x) * tree.W // tree, NOT tree2!!!
-      dy := int32(y) * tree.H // tree, NOT tree2!!!
+      dx := x * tree.W // tree, NOT tree2!!!
+      dy := y * tree.H // tree, NOT tree2!!!
       for i := range objs {
         obj := &gfx.RTree{Rect:objs[i].Rect, Payload:objs[i].Payload}
         obj.X += dx
@@ -121,8 +121,8 @@ func main() {
   gfx.QueryEfficiencyReset()
   
   Screen := &sdl.Rect{0,0,1920,1080}
-  var Sx int32 = 20 // #screens in x direction
-  var Sy int32 = 5  // #screens in y direction
+  var Sx int = 20 // #screens in x direction
+  var Sy int = 5  // #screens in y direction
   
   lowshift := []uint{3, 5, 7}
   colorshift := []uint{8,16,24}
@@ -132,9 +132,9 @@ func main() {
   
   for i := range lowshift {
     count := 0
-    var y int32 = 0
+    var y int = 0
     for y < Sy*Screen.H {
-      var x int32 = 0
+      var x int = 0
       for x < Sx*Screen.W {
         w := rnd(Screen.W >> lowshift[i], Screen.W >> (lowshift[i]-2))
         h := rnd(Screen.H >> lowshift[i], Screen.H >> (lowshift[i]-2))
@@ -151,7 +151,7 @@ func main() {
   
   var World sdl.Rect
   for r := rects; r != nil; r = r.Sibling {
-    World = r.Union(&World)
+    World = sdl.UnionRect(r.Rect, World)
   }
   
   rects2 := &gfx.RTree{Rect:rects.Rect, Payload:rects.Payload}
@@ -167,7 +167,7 @@ func main() {
     prev := rects
     for r := rects; r != nil; r = next {
       next = r.Sibling
-      if r.HasIntersection(window) {
+      if sdl.HasIntersection(r.Rect, *window) {
         if r == rects {
           rects = r.Sibling
           prev = rects
@@ -194,7 +194,7 @@ func main() {
   for r := rects; r != nil; r = r.Sibling { totalcount-- }
   if totalcount != 0 { panic("bar") }
   
-  if !tree.Rect.Equals(&World) { panic("foobar") }
+  if !sdl.RectEquals(tree.Rect, World) { panic("foobar") }
   
   fmt.Println(tree.Rect)
   
@@ -208,7 +208,7 @@ func main() {
     rectsmap := map[string]bool{}
     
     for r := rects; r != nil; r = r.Sibling {
-      if r.HasIntersection(window) {
+      if sdl.HasIntersection(r.Rect, *window) {
         rectsmap[r.String()] = true
       }
     }
@@ -242,6 +242,6 @@ func main() {
    
 }
 
-func rnd(low, hi int32) int32 {
-  return rand.Int31n(hi-low)+low
+func rnd(low, hi int) int {
+  return int(rand.Int31n(int32(hi-low))+int32(low))
 }

@@ -27,7 +27,7 @@ import (
          "fmt"
          "math"
          "strings"
-         "github.com/veandco/go-sdl2/sdl"
+         "winterdrache.de/bindings/sdl"
        )
 
 // How many children an RTree node is allowed to have.
@@ -98,7 +98,7 @@ func (r *RTree) Merge(tree *RTree) {
     panic("RTree.Merge() called with empty rectangle") // Untested case. Probably doesn't work because an empty tree would be seen as fully enclosed by r regardless of its X/Y coordinates.
   }
   
-  sect, _ := r.Intersect(&tree.Rect)
+  _,sect := sdl.IntersectRect(r.Rect, tree.Rect)
   
   // If r fully enclosed by tree but not identical (i.e. r is truely smaller)
   if sect.W == r.W && sect.H == r.H && (r.H != tree.H || r.W != tree.W) { 
@@ -110,7 +110,7 @@ func (r *RTree) Merge(tree *RTree) {
     // even require inserting a new one).
   } 
   
-  union := r.Union(&tree.Rect)
+  union := sdl.UnionRect(r.Rect, tree.Rect)
     
   // Grow r if necessary
   if union.W != r.W || union.H != r.H {
@@ -151,8 +151,8 @@ func (r *RTree) Merge(tree *RTree) {
 // All of the returned RTrees are copies that have no siblings or children.
 // Modifying them will not affect r.
 func (r *RTree) Query(area *sdl.Rect, wrap bool) []*RTree {
-  dx := int32(0)
-  dy := int32(0)
+  dx := 0
+  dy := 0
   if wrap {
     dx = ((area.X - r.X) / r.W) * r.W
     dy = ((area.Y - r.Y) / r.H) * r.H
@@ -254,8 +254,8 @@ func (r *RTree) Query(area *sdl.Rect, wrap bool) []*RTree {
   return result
 }
 
-func (r *RTree) query(area *sdl.Rect, shiftX int32, shiftY int32) ([]*RTree,int) {
-  if !r.HasIntersection(area) { return nil,1 }
+func (r *RTree) query(area *sdl.Rect, shiftX int, shiftY int) ([]*RTree,int) {
+  if !sdl.HasIntersection(r.Rect, *area) { return nil,1 }
   
   count := 1
   result := make([]*RTree,0,16)
@@ -276,12 +276,12 @@ func (r *RTree) mergeChildren() {
   for r.ChildCount() > RTREE_NODE_SIZE {
     var best_kid1 *RTree
     var best_kid2 *RTree
-    var best_cu int32 = 2147483647
+    var best_cu int = 2147483647
     var best_mcc int
     
     for kid1 := r.Child; kid1 != nil; kid1 = kid1.Sibling {
       for kid2 := kid1.Sibling; kid2 != nil; kid2 = kid2.Sibling {
-        union := kid1.Union(&kid2.Rect)
+        union := sdl.UnionRect(kid1.Rect, kid2.Rect)
         // circumference of the union rectangle
         cu := union.H+union.W
         /*

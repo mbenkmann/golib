@@ -23,7 +23,7 @@
 package gfx
 
 import "unsafe"
-import "github.com/veandco/go-sdl2/sdl"
+import "winterdrache.de/bindings/sdl"
 
 const (
   // Mask the red bits in an RGBA uint32.
@@ -42,12 +42,12 @@ const (
 //   bits 16..23 R
 //   bits 8..15  G
 //   bits 0..7   B
-func TextureFromRGBA(renderer *sdl.Renderer,image []uint32, width, height int32) *sdl.Texture {
-  surface, err := sdl.CreateRGBSurfaceFrom(unsafe.Pointer(&image[0]), width, height, 32, int(width)<<2, RMask, GMask, BMask, AMask)
-  if err != nil { panic(err) }
+func TextureFromRGBA(renderer *sdl.Renderer,image []uint32, width, height int) *sdl.Texture {
+  surface := sdl.CreateRGBSurfaceFrom((*(*[999999999]byte)(unsafe.Pointer(&image[0])))[0:width*height*4], width, height, 32, int(width)<<2, RMask, GMask, BMask, AMask)
+  if surface == nil { panic(sdl.GetError()) }
   defer surface.Free()
-  t, err := renderer.CreateTextureFromSurface(surface)
-  if err != nil { panic(err) }
+  t := renderer.CreateTextureFromSurface(surface)
+  if t == nil { panic(sdl.GetError()) }
   return t
 }
 
